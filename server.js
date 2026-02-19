@@ -1,3 +1,15 @@
+const express = require("express");
+const crypto = require("crypto");
+
+const app = express();
+
+/**
+ * ENV (Railway Variables)
+ */
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
+const FLOW_WEBHOOK_SECRET = process.env.FLOW_WEBHOOK_SECRET;
+const FLOW_SIGNATURE_HEADER = (process.env.FLOW_SIGNATURE_HEADER || "x-signature").toLowerCase();
+
 app.post(
   "/webhook",
   express.raw({ type: "application/json" }),
@@ -51,3 +63,46 @@ app.post(
     return res.status(200).send("OK");
   }
 );
+
+// rota opcional para teste do painel (evita 404)
+app.post("/test.webhook", (req, res) => res.status(200).send("OK"));
+
+app.get("/", (req, res) => res.send("online"));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Servidor rodando na porta " + PORT));
+
+function formatBRLFromCents(cents) {
+  const n = Number(cents);
+  if (!Number.isFinite(n)) return "R$ (não informado)";
+  return `R$ ${(n / 100).toFixed(2).replace(".", ",")}`;
+}
+
+async function sendDiscordMessage(text) {
+  if (!DISCORD_WEBHOOK) {
+    console.log("⚠️ DISCORD_WEBHOOK não configurado (env). Mensagem:", text);
+    return;
+  }
+
+  const r = await fetch(DISCORD_WEBHOOK, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: text }),
+  });
+
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    console.log("❌ Erro ao enviar pro Discord:", r.status, body);
+  }
+}
+
+function timingSafeEqualHex(a, b) {
+  try {
+    const ba = Buffer.from(a, "hex");
+    const bb = Buffer.from(b, "hex");
+    if (ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
